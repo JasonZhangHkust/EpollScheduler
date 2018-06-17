@@ -1,10 +1,9 @@
-#ifndef TIMER_EPOLLER_H
-#define TIMER_EPOLLER_H
+#ifndef __EPOLLER_H
+#define __EPOLLER_H
 
 #include <sys/epoll.h>
 #include <cassert>
 #include <memory>
-
 
 class Epoller {
 public:
