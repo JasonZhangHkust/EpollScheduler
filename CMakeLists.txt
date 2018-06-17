@@ -3,4 +3,4 @@ project(Timer)
 
 set(CMAKE_CXX_STANDARD 11)
 
-add_executable(Timer main.cpp Timer.h Timer.cpp Epoller.cpp Epoller.h)
+add_executable(Timer main.cpp Scheduler.h Scheduler.cpp Epoller.cpp Epoller.h)
