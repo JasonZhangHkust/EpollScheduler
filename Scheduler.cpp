@@ -32,6 +32,7 @@ void Scheduler::initialize()
     }
 
     _tEpoller.add(_iSchedulerFD, 0, EPOLLIN);
+    
 }
 
 void Scheduler::run()
