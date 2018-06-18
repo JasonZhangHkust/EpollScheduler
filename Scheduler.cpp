@@ -2,6 +2,7 @@
 #include <iostream>
 #include <sys/time.h>
 #include <string.h>
+#include <cmath>
 
 #include "Scheduler.h"
 
@@ -15,9 +16,9 @@ Scheduler::~Scheduler()
     {
         quit();
 
-        if(_tScheduler.joinable())
+        if(_tSchedulerThread.joinable())
         {
-            _tScheduler.join();
+            _tSchedulerThread.join();
         }
     }
 }
@@ -37,6 +38,10 @@ void Scheduler::initialize()
 
 }
 
+void Scheduler::start()
+{
+    _tSchedulerThread = std::thread(&Scheduler::run, this);
+}
 void Scheduler::run()
 {
     while(!_bQuit)
@@ -50,7 +55,7 @@ void Scheduler::run()
                 const epoll_event &ev = _tEpoller.get(n);
                 if(ev.events & EPOLLIN)
                 {
-                    readSchedulerfd();
+                    readSchedulerFD();
                     handleRead();
                 }
                 else
@@ -71,7 +76,7 @@ void Scheduler::run()
 
 void Scheduler::quit()
 {
-    std::lock_guard(_mLock);
+    std::lock_guard<std::mutex> guard(_mLock);
     _bQuit = true;
     _mCond.notify_all();
 
@@ -79,7 +84,7 @@ void Scheduler::quit()
 
 void Scheduler::notify()
 {
-    std::lock_guard(_mLock);
+    std::lock_guard<std::mutex> guard(_mLock);
     _mCond.notify_one();
 }
 
@@ -109,9 +114,9 @@ bool Scheduler::runAfter(const double &dSec, std::function<void()> fCallback)
 
 bool Scheduler::runEvery(const double &dSec, std::function<void()> fCallback)
 {
-    SchedulerEvent tSchedulerEvent;
+    struct SchedulerEvent tSchedulerEvent;
     tSchedulerEvent.fCallback = fCallback;
-    tSchedulerEvent.cycle     = 0.0;
+    tSchedulerEvent.cycle     = dSec;
 
     addTimer(getNowUs() + dSec * 1000000, tSchedulerEvent);
 
@@ -121,7 +126,7 @@ bool Scheduler::runEvery(const double &dSec, std::function<void()> fCallback)
 inline uint64_t Scheduler::getNowUs()
 {
     struct timeval tTtimeVal;
-    gettimeofday(&tTtimeVal, nullptr);
+    gettimeofday(&tTtimeVal, NULL);
 
     return tTtimeVal.tv_sec * 1000000 + tTtimeVal.tv_usec;
 }
@@ -130,14 +135,14 @@ void Scheduler::addTimer(const uint64_t &lTime, const Scheduler::SchedulerEvent 
 {
     if (insertIntoTimeoutMap(lTime, tSchedulerEvent))
     {
-        resetSchedulerfd();
+        resetSchedulerFD();
     }
 }
 
 bool Scheduler::insertIntoTimeoutMap(const uint64_t &lTime, const Scheduler::SchedulerEvent &tSchedulerEvent)
 {
     bool bTimeOutChange = false;
-    std::lock_guard(_mLock);
+    std::lock_guard<std::mutex> guard(_mLock);
     auto iter = _mTimedCallBacks.begin();
 
     if(iter == _mTimedCallBacks.end() || lTime < (iter->first))
@@ -152,7 +157,7 @@ bool Scheduler::insertIntoTimeoutMap(const uint64_t &lTime, const Scheduler::Sch
 
 uint64_t Scheduler::timeLapsed(const uint64_t &lNow)
 {
-    std::lock_guard(_mLock);
+    std::lock_guard<std::mutex> guard(_mLock);
 
     uint64_t lNextTimeOut = (_mTimedCallBacks.begin()->first);
     uint64_t lTimeLapsed  = lNextTimeOut -lNow;
@@ -165,14 +170,14 @@ uint64_t Scheduler::timeLapsed(const uint64_t &lNow)
     return lTimeLapsed;
 }
 
-void Scheduler::resetSchedulerfd()
+void Scheduler::resetSchedulerFD()
 {
-    itimerspec tNewTime;
-    itimerspec tOldTime;
+    struct itimerspec tNewTime;
+    struct itimerspec tOldTime;
     bzero(&tNewTime, sizeof(tNewTime));
     bzero(&tOldTime, sizeof(tOldTime));
 
-    timespec tTimeDiffvalue;
+    struct timespec tTimeDiffvalue;
 
     uint64_t lTimeLapsed = timeLapsed(getNowUs());
 
@@ -189,7 +194,7 @@ void Scheduler::resetSchedulerfd()
 }
 
 
-void Scheduler::readSchedulerfd()
+void Scheduler::readSchedulerFD()
 {
     uint64_t lExpiredNum = 0;
     ssize_t n = read(_iSchedulerFD, &lExpiredNum, sizeof(lExpiredNum));
@@ -204,12 +209,12 @@ void Scheduler::readSchedulerfd()
 
 void Scheduler::handleRead()
 {
-    vector<SchedulerEvent> vTimeOutEvent;
+    std::vector<Scheduler::SchedulerEvent> vTimeOutEvent;
 
     { // lock
 
-        std::lock_guard(_mLock);
-        std::multimap<uint64_t, SchedulerEvent>::iterator iter = getTimedMap().lower_bound(getNowUs());
+        std::lock_guard<std::mutex> guard(_mLock);
+        std::multimap<uint64_t, Scheduler::SchedulerEvent>::iterator iter = getTimedMap().lower_bound(getNowUs());
 
         for (auto it = getTimedMap().begin(); it != iter; ++it)
         {
@@ -221,14 +226,45 @@ void Scheduler::handleRead()
 
     } // unlock
 
-    for (auto& k : vTimeOutEvent)
+    for (auto& tSchedulerEvent : vTimeOutEvent)
     {
         // CallBack;
-        k.callback();
+        tSchedulerEvent.fCallback();
     }
 
     setRepeatTimer(vTimeOutEvent);
 }
 
+void Scheduler::setRepeatTimer(const std::vector<Scheduler::SchedulerEvent> &vTimeOutEvent)
+{
+    for(auto& tSchedulerEvent : vTimeOutEvent)
+    {
+        if (fabs(tSchedulerEvent.cycle - 0.0) < 0.000001)
+        {
+            // Single Shot, not involved in the repeated insertion
+        }
+        else
+        {
+            // repeated insertion
+            insertIntoTimeoutMap(getNowUs() + tSchedulerEvent.cycle * 1000000UL, tSchedulerEvent);
+        }
+    }
 
+    bool repeat = false;
+
+    { // lock
+
+        std::lock_guard<std::mutex> guard(_mLock);
+        if (!getTimedMap().empty())
+        {
+            repeat = true;
+        }
+
+    } // unlock
+
+    if (repeat)
+    {
+        resetSchedulerFD();
+    }
+}
 

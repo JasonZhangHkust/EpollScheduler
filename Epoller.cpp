@@ -1,8 +1,9 @@
 
+#include <iostream>
 #include "Epoller.h"
-#include <unistd.h>
 
-Epoller::Epoller(bool bET) : _iEpollFD(-1), _pPrevs(nullptr), _bET(bET), _iMaxConn(1024)
+
+Epoller::Epoller(bool bET) : _iEpollFD(-1),_pPrevs(NULL), _bET(bET), _iMaxConn(1024)
 {}
 
 Epoller::~Epoller()
@@ -16,31 +17,39 @@ Epoller::~Epoller()
 
 void Epoller::ctrl(int iFD, long long lData, unsigned int iEvents, int iOP)
 {
-    struct  epoll_event ev;
-    ev.data.u64 = data;
+    epoll_event ev;
+    ev.data.u64 = lData;
     if(_bET)
     {
         ev.events = iEvents | EPOLLET;
     }
     else
     {
-        ev.events = events;
+        ev.events = iEvents;
     }
 
     epoll_ctl(_iEpollFD, iOP, iFD, &ev);
 
 }
 
-void Epoller::create(int iMaxConn)
-{
+void Epoller::create(int iMaxConn) {
     _iMaxConn = iMaxConn;
-    _iEpollFD =  epoll_create(_iMaxConn + 1);
+    try {
+        _iEpollFD = epoll_create(_iMaxConn + 1);
+    }
+    catch (...)
+    {
+        std::cout << "EPOLL CREATE FAIL" << std::endl;
+    }
+
+
+
     if(_pPrevs)
     {
         delete[] _pPrevs;
     }
 
-    _pPrevs = std::make_shared<epoll_event>(_iMaxConn + 1);
+    _pPrevs = new epoll_event[_iMaxConn + 1];
 }
 
 void Epoller::add(int iFD, long long lData, unsigned int iEvent)
@@ -60,7 +69,7 @@ void Epoller::dele(int iFD, long long lData, unsigned int iEvent)
 
 int Epoller::wait(int iMs)
 {
-    return epoll_wait(_iEpollFD, _pPrevs.get(), _iMaxConn + 1, iMs);
+    return epoll_wait(_iEpollFD, _pPrevs, _iMaxConn + 1, iMs);
 }
 
 

@@ -4,6 +4,7 @@
 #include <sys/epoll.h>
 #include <cassert>
 #include <memory>
+#include <unistd.h>
 
 class Epoller {
 public:
@@ -23,7 +24,7 @@ public:
     //millisecond
     int wait(int iMs);
 
-    struct epoll_event& get(int iIndex) {assert(_pevs != 0); return _pevs[iIndex];}
+    struct epoll_event& get(int iIndex) {assert(_pPrevs !=0); return _pPrevs[iIndex];}
 
 protected:
 
@@ -36,7 +37,7 @@ protected:
 
     int _iMaxConn;
 
-    std::shared_ptr<epoll_event> _pPrevs;
+    epoll_event* _pPrevs;
 
     bool _bET;
 

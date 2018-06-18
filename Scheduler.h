@@ -23,6 +23,7 @@ public:
     Scheduler();
     ~Scheduler();
     void run();
+    void start();
     void initialize();
     void quit();
     void notify();
@@ -32,7 +33,7 @@ public:
     bool runEvery(const double& dSec, std::function<void()> fCallback);
 
 private:
-    std::thread _tScheduler;
+    std::thread _tSchedulerThread;
     std::mutex  _mLock;
     std::condition_variable _mCond;
     bool _bQuit;
@@ -41,13 +42,14 @@ private:
     Epoller _tEpoller;
     // Time Stored in Us
     std::multimap<uint64_t, SchedulerEvent> _mTimedCallBacks;
+
 private:
     uint64_t getNowUs();
     void addTimer(const uint64_t& lTime, const SchedulerEvent& tSchedulerEvent);
     bool insertIntoTimeoutMap(const uint64_t& lTime, const SchedulerEvent& tSchedulerEvent);
     uint64_t timeLapsed(const uint64_t& lNow);
-    void resetSchedulerfd();
-    void readSchedulerfd();
+    void resetSchedulerFD();
+    void readSchedulerFD();
     void setRepeatTimer(const std::vector<SchedulerEvent>& vTimeOutEvent);
     void handleRead();
 
