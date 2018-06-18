@@ -2,6 +2,7 @@
 #define __SCHEDULER_H
 
 #include <thread>
+#include <condition_variable>
 #include <functional>
 #include <vector>
 #include <map>
@@ -33,21 +34,24 @@ public:
 private:
     std::thread _tScheduler;
     std::mutex  _mLock;
+    std::condition_variable _mCond;
     bool _bQuit;
     int  _iSchedulerFD;
     uint64_t _lInterval;
     Epoller _tEpoller;
+    // Time Stored in Us
     std::multimap<uint64_t, SchedulerEvent> _mTimedCallBacks;
 private:
     uint64_t getNowUs();
-    void addTimer(const uint64_t& lTime, SchedulerEvent);
-    bool insertIntoTimeoutMap(const uint64_t& when, const SchedulerEvent& timer_struct);
+    void addTimer(const uint64_t& lTime, const SchedulerEvent& tSchedulerEvent);
+    bool insertIntoTimeoutMap(const uint64_t& lTime, const SchedulerEvent& tSchedulerEvent);
     uint64_t timeLapsed(const uint64_t& lNow);
     void resetSchedulerfd();
     void readSchedulerfd();
     void setRepeatTimer(const std::vector<SchedulerEvent>& vTimeOutEvent);
     void handleRead();
 
+    std::multimap<uint64_t, SchedulerEvent>& getTimedMap() { return _mTimedCallBacks; }
 };
 
 #endif //SCHEDULER_H
