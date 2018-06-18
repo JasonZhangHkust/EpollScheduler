@@ -185,7 +185,8 @@ void Scheduler::resetSchedulerFD()
     tTimeDiffvalue.tv_nsec = static_cast<long>((lTimeLapsed % 1000000) * 1000);
 
     tNewTime.it_value = tTimeDiffvalue;
-
+    // it_value != 0 then the timerfd will timeout when the latest setting time arrives
+    // it_interval ==0 timeout only once, after timeout continuously set timerfd
     if(timerfd_settime(_iSchedulerFD, 0, &tNewTime, &tOldTime) == -1)
     {
         std::cout << "TimeOut FD Setting Failed"  << std::endl;
